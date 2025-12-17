@@ -56,6 +56,12 @@ flutter:
   assets:
     - assets/volley_bg.jpg
     - assets/volley_bg2.png
+    - assets/icone_volley/ace.jpg
+    - assets/icone_volley/block.png
+    - assets/icone_volley/block_out.png
+    - assets/icone_volley/recep.jpeg
+    - assets/icone_volley/spike.png
+    - assets/icone_volley/ball.png
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
   # For details regarding adding assets from package dependencies, see

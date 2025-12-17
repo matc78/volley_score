@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:volley_score/page/match_setup_page.dart';
 import 'package:volley_score/page/teams_page.dart';
 
 class HomePage extends StatelessWidget {
@@ -81,7 +82,14 @@ class HomePage extends StatelessWidget {
                     icon: Icons.sports_volleyball,
                     bgColor: mikasaBlue,
                     textColor: mikasaYellow,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MatchSetupPage(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

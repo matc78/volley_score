@@ -114,6 +114,8 @@ class TeamDetailPage extends StatelessWidget {
                               .toString();
                           final lastName = (player["lastName"] ?? "")
                               .toString();
+                          final number =
+                              (player["number"] ?? "").toString().trim();
                           final height = player["height"]; // en cm
                           final weight = player["weight"]; // en kg
                           final photoUrl = (player["photoUrl"] ?? "")
@@ -161,12 +163,16 @@ class TeamDetailPage extends StatelessWidget {
                                     : null,
                                 child: photoUrl.isEmpty
                                     ? Text(
-                                        (firstName.isNotEmpty
-                                                ? firstName[0]
-                                                : "?")
-                                            .toUpperCase(),
-                                        style: const TextStyle(
-                                          color: mikasaBlue,
+                                        number.isNotEmpty
+                                            ? number
+                                            : (firstName.isNotEmpty
+                                                    ? firstName[0]
+                                                    : "?")
+                                                .toUpperCase(),
+                                        style: TextStyle(
+                                          color: number.isNotEmpty
+                                              ? Colors.red
+                                              : mikasaBlue,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 20,
                                         ),
@@ -188,6 +194,19 @@ class TeamDetailPage extends StatelessWidget {
                                   color: Colors.black87,
                                 ),
                               ),
+                              trailing: number.isNotEmpty
+                                  ? CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: Colors.red,
+                                      child: Text(
+                                        number,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -201,6 +220,7 @@ class TeamDetailPage extends StatelessWidget {
                                       height: height?.toString(),
                                       weight: weight?.toString(),
                                       photoUrl: photoUrl,
+                                      number: number.isNotEmpty ? number : null,
                                     ),
                                   ),
                                 );
@@ -254,6 +274,7 @@ class TeamDetailPage extends StatelessWidget {
   void _showAddPlayerDialog(BuildContext context, String teamId) {
     final firstNameController = TextEditingController();
     final lastNameController = TextEditingController();
+    final numberController = TextEditingController();
     final heightController = TextEditingController();
     final weightController = TextEditingController();
 
@@ -299,6 +320,15 @@ class TeamDetailPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
+
+                    // Numero (optionnel)
+                    TextField(
+                      controller: numberController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: "Numéro (optionnel)",
+                      ),
+                    ),
 
                     // Prénom
                     TextField(
@@ -349,6 +379,7 @@ class TeamDetailPage extends StatelessWidget {
                   onPressed: () async {
                     String first = firstNameController.text.trim();
                     String last = lastNameController.text.trim();
+                    String number = numberController.text.trim();
                     String height = heightController.text.trim();
                     String weight = weightController.text.trim();
 
@@ -369,6 +400,7 @@ class TeamDetailPage extends StatelessWidget {
                         .add({
                           "firstName": first,
                           "lastName": last,
+                          "number": number.isNotEmpty ? number : null,
                           "photoUrl": imageUrl ?? "",
                           "height": height.isNotEmpty ? height : null,
                           "weight": weight.isNotEmpty ? weight : null,

@@ -11,6 +11,7 @@ class PlayerDetailPage extends StatefulWidget {
   final String firstName;
   final String lastName;
   final String? photoUrl;
+  final String? number;
   final String? height;
   final String? weight;
 
@@ -22,6 +23,7 @@ class PlayerDetailPage extends StatefulWidget {
     required this.firstName,
     required this.lastName,
     this.photoUrl,
+    this.number,
     this.height,
     this.weight,
   });
@@ -33,6 +35,7 @@ class PlayerDetailPage extends StatefulWidget {
 class _PlayerDetailPageState extends State<PlayerDetailPage> {
   late String firstName;
   late String lastName;
+  String? number;
   String? height;
   String? weight;
   String? photoUrl;
@@ -45,6 +48,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
     super.initState();
     firstName = widget.firstName;
     lastName = widget.lastName;
+    number = widget.number;
     height = widget.height;
     weight = widget.weight;
     photoUrl = widget.photoUrl;
@@ -74,6 +78,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
   void _editPlayerDialog() {
     final firstCtrl = TextEditingController(text: firstName);
     final lastCtrl = TextEditingController(text: lastName);
+    final numberCtrl = TextEditingController(text: number ?? "");
     final heightCtrl = TextEditingController(text: height ?? "");
     final weightCtrl = TextEditingController(text: weight ?? "");
 
@@ -125,6 +130,13 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                       decoration: const InputDecoration(labelText: "Nom"),
                     ),
                     TextField(
+                      controller: numberCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: "Numéro",
+                      ),
+                    ),
+                    TextField(
                       controller: heightCtrl,
                       decoration: const InputDecoration(
                         labelText: "Taille (cm)",
@@ -156,6 +168,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                   onPressed: () async {
                     String f = firstCtrl.text.trim();
                     String l = lastCtrl.text.trim();
+                    String n = numberCtrl.text.trim();
                     String h = heightCtrl.text.trim();
                     String w = weightCtrl.text.trim();
 
@@ -166,6 +179,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                     l = l.toUpperCase();
 
                     // Infos optionnelles
+                    final formattedNumber = n.isNotEmpty ? n : null;
                     final formattedHeight = h.isNotEmpty ? h : null;
                     final formattedWeight = w.isNotEmpty ? w : null;
 
@@ -180,6 +194,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                           "lastName": l,
                           "height": formattedHeight,
                           "weight": formattedWeight,
+                          "number": formattedNumber,
                           "photoUrl": tempPhoto ?? "",
                         });
 
@@ -187,6 +202,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                     setState(() {
                       firstName = f;
                       lastName = l;
+                      number = formattedNumber;
                       height = formattedHeight;
                       weight = formattedWeight;
                       photoUrl = tempPhoto;
@@ -205,6 +221,11 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final displayName =
+        number != null && number!.isNotEmpty
+            ? "N°${number!} • ${lastName.toUpperCase()} $firstName"
+            : "${lastName.toUpperCase()} $firstName";
+
     return Scaffold(
       body: Stack(
         children: [
@@ -232,7 +253,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                       ),
                       Expanded(
                         child: Text(
-                          "${lastName.toUpperCase()} $firstName",
+                          displayName,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: mikasaBlue,
@@ -287,6 +308,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
 
   // PLAYER CARD
   Widget _buildPlayerCard() {
+    final hasNumber = number != null && number!.isNotEmpty;
     String heightText = height != null ? "$height cm" : "?? cm";
     String weightText = weight != null ? "$weight kg" : "?? kg";
     String combined = "$heightText • $weightText";
@@ -309,7 +331,11 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                 : null,
             child: photoUrl == null || photoUrl!.isEmpty
                 ? Text(
-                    firstName.isNotEmpty ? firstName[0].toUpperCase() : "?",
+                    hasNumber
+                        ? number!
+                        : (firstName.isNotEmpty
+                                ? firstName[0].toUpperCase()
+                                : "?"),
                     style: const TextStyle(
                       color: mikasaBlue,
                       fontSize: 40,
@@ -320,6 +346,26 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
           ),
 
           const SizedBox(height: 8),
+
+          if (hasNumber)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: mikasaBlue.withOpacity(0.08),
+                border: Border.all(color: mikasaBlue, width: 1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                "N°${number!}",
+                style: const TextStyle(
+                  color: mikasaBlue,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+
+          if (hasNumber) const SizedBox(height: 8),
 
           Text(
             firstName,
