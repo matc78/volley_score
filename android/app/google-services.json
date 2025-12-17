@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1016962666124",
+    "project_id": "volley-score-f5058",
+    "storage_bucket": "volley-score-f5058.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1016962666124:android:f0cfe78f24cd96a00c75a9",
+        "android_client_info": {
+          "package_name": "com.example.volley_score"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUgux2o7vX3e9PuOty3St-RL5GmYcbLac"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
