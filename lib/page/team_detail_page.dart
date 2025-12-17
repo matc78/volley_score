@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:volley_score/page/player_detail_page.dart';
 
 class TeamDetailPage extends StatelessWidget {
   final String teamId;
@@ -184,7 +185,21 @@ class TeamDetailPage extends StatelessWidget {
                                 ),
                               ),
                               onTap: () {
-                                // Plus tard : éditer le joueur
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => PlayerDetailPage(
+                                      teamId: teamId,
+                                      teamName: teamName,
+                                      playerId: player.id,
+                                      firstName: firstName,
+                                      lastName: lastName,
+                                      height: height?.toString(),
+                                      weight: weight?.toString(),
+                                      photoUrl: photoUrl,
+                                    ),
+                                  ),
+                                );
                               },
                             ),
                           );
