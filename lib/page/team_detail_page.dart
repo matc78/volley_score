@@ -60,6 +60,10 @@ class TeamDetailPage extends StatelessWidget {
                           ),
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: mikasaBlue),
+                        onPressed: () => _editTeamName(context),
+                      ),
                     ],
                   ),
                 ),
@@ -377,6 +381,63 @@ class TeamDetailPage extends StatelessWidget {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  void _editTeamName(BuildContext context) {
+    final nameController = TextEditingController(text: teamName);
+    const mikasaBlue = Color(0xFF0033A0);
+    const mikasaYellow = Color(0xFFF5F12D);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            "Modifier le nom de l'équipe",
+            style: TextStyle(color: mikasaBlue),
+          ),
+          content: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: "Nom de l'équipe"),
+          ),
+          actions: [
+            TextButton(
+              child: const Text("Annuler", style: TextStyle(color: mikasaBlue)),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: mikasaBlue),
+              child: const Text(
+                "Enregistrer",
+                style: TextStyle(color: mikasaYellow),
+              ),
+              onPressed: () async {
+                final newName = nameController.text.trim();
+                if (newName.isEmpty) return;
+
+                // Mise à jour Firestore
+                await FirebaseFirestore.instance
+                    .collection("teams")
+                    .doc(teamId)
+                    .update({"name": newName});
+
+                // Rafraîchissement direct
+                Navigator.pop(context);
+
+                // On recrée la page avec le nouveau nom
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        TeamDetailPage(teamId: teamId, teamName: newName),
+                  ),
+                );
+              },
+            ),
+          ],
         );
       },
     );
