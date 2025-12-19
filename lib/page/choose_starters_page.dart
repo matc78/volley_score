@@ -29,7 +29,11 @@ class _ChooseStartersPageState extends State<ChooseStartersPage> {
 
   @override
   Widget build(BuildContext context) {
-    bool canStart = selectedPlayers.length == 6;
+    final int maxPlayers = liberoId != null ? 7 : 6;
+    final int startersCount =
+        selectedPlayers.length - (liberoId == null ? 0 : 1);
+    bool canStart =
+        startersCount >= 2 && selectedPlayers.length <= maxPlayers;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -132,33 +136,34 @@ class _ChooseStartersPageState extends State<ChooseStartersPage> {
                     return GestureDetector(
                       onTap: () {
                         setState(() {
-                          // ========================
-                          // 1️⃣ CHOIX DES 6 TITULAIRES
-                          // ========================
-                          if (selectedPlayers.length < 6) {
-                            if (isStarter) {
-                              selectedPlayers.remove(id);
+                          final int currentMax =
+                              liberoId != null ? 7 : 6; // 6vs6 ou 7 avec libéro
+                          if (isStarter) {
+                            selectedPlayers.remove(id);
+                            if (liberoId == id) liberoId = null;
+                          } else {
+                            if (selectedPlayers.length >= currentMax) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    "Maximum $currentMax joueurs (7 si libéro).",
+                                  ),
+                                ),
+                              );
                             } else {
                               selectedPlayers.add(id);
                             }
-                            // Si un titulaire est retiré → libéro potentiellement invalide
-                            if (isStarter && liberoId == id) {
-                              liberoId = null;
-                            }
-                            return;
                           }
-
-                          // ========================
-                          // 2️⃣ LIBÉRO OPTIONNEL
-                          // ========================
+                        });
+                      },
+                      onDoubleTap: () {
+                        setState(() {
+                          // Un double tap désigne le libéro et autorise 7 joueurs
                           if (!selectedPlayers.contains(id)) {
-                            // joueur non titulaire → peut être libéro
-                            if (isLibero) {
-                              liberoId = null;
-                            } else {
-                              liberoId = id;
-                            }
+                            if (selectedPlayers.length >= 7) return;
+                            selectedPlayers.add(id);
                           }
+                          liberoId = id;
                         });
                       },
                       child: Container(
@@ -234,13 +239,13 @@ class _ChooseStartersPageState extends State<ChooseStartersPage> {
           ),
 
           // ---------------------- TEXTE LIBÉRO ----------------------
-          if (selectedPlayers.length == 6)
+          if (selectedPlayers.length >= 2)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Text(
                 liberoId == null
-                    ? "Sélectionnez un LIBÉRO (optionnel)"
-                    : "Libéro sélectionné",
+                    ? "Double-tapez sur un joueur pour le passer LIBÉRO (optionnel)"
+                    : "Libéro sélectionné (double-tap pour changer)",
                 style: const TextStyle(
                   color: mikasaYellow,
                   fontSize: 16,
