@@ -107,17 +107,39 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                       child: CircleAvatar(
                         radius: 40,
                         backgroundColor: mikasaBlue.withOpacity(0.2),
-                        backgroundImage:
-                            tempPhoto != null && tempPhoto!.isNotEmpty
+                        backgroundImage: (tempPhoto != null && tempPhoto!.isNotEmpty)
                             ? NetworkImage(tempPhoto!)
-                            : null,
-                        child: tempPhoto == null
-                            ? const Icon(
-                                Icons.camera_alt,
-                                color: mikasaBlue,
-                                size: 32,
-                              )
-                            : null,
+                            : (photoUrl != null && photoUrl!.isNotEmpty
+                                ? NetworkImage(photoUrl!)
+                                : null),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if ((tempPhoto == null || tempPhoto!.isEmpty) &&
+                                (photoUrl == null || photoUrl!.isEmpty))
+                              Text(
+                                firstName.isNotEmpty
+                                    ? firstName[0].toUpperCase()
+                                    : "?",
+                                style: const TextStyle(
+                                  color: mikasaBlue,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 26,
+                                ),
+                              ),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black38,
+                                borderRadius: BorderRadius.circular(40),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.edit,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -132,9 +154,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                     TextField(
                       controller: numberCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Numéro",
-                      ),
+                      decoration: const InputDecoration(labelText: "Numéro"),
                     ),
                     TextField(
                       controller: heightCtrl,
@@ -152,64 +172,119 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                 ),
               ),
               actions: [
-                TextButton(
-                  child: const Text(
-                    "Annuler",
-                    style: TextStyle(color: mikasaBlue),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: mikasaBlue),
-                  child: const Text(
-                    "Enregistrer",
-                    style: TextStyle(color: mikasaYellow),
-                  ),
-                  onPressed: () async {
-                    String f = firstCtrl.text.trim();
-                    String l = lastCtrl.text.trim();
-                    String n = numberCtrl.text.trim();
-                    String h = heightCtrl.text.trim();
-                    String w = weightCtrl.text.trim();
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      child: const Text(
+                        "Annuler",
+                        style: TextStyle(color: mikasaBlue),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: mikasaBlue,
+                      ),
+                      child: const Text(
+                        "Enregistrer",
+                        style: TextStyle(color: mikasaYellow),
+                      ),
+                      onPressed: () async {
+                        String f = firstCtrl.text.trim();
+                        String l = lastCtrl.text.trim();
+                        String n = numberCtrl.text.trim();
+                        String h = heightCtrl.text.trim();
+                        String w = weightCtrl.text.trim();
 
-                    // Format prénom et nom
-                    if (f.isNotEmpty) {
-                      f = f[0].toUpperCase() + f.substring(1).toLowerCase();
-                    }
-                    l = l.toUpperCase();
+                        // Format prénom et nom
+                        if (f.isNotEmpty) {
+                          f = f[0].toUpperCase() + f.substring(1).toLowerCase();
+                        }
+                        l = l.toUpperCase();
 
-                    // Infos optionnelles
-                    final formattedNumber = n.isNotEmpty ? n : null;
-                    final formattedHeight = h.isNotEmpty ? h : null;
-                    final formattedWeight = w.isNotEmpty ? w : null;
+                        // Infos optionnelles
+                        final formattedNumber = n.isNotEmpty ? n : null;
+                        final formattedHeight = h.isNotEmpty ? h : null;
+                        final formattedWeight = w.isNotEmpty ? w : null;
 
-                    // Update Firestore
-                    await FirebaseFirestore.instance
-                        .collection("teams")
-                        .doc(widget.teamId)
-                        .collection("players")
-                        .doc(widget.playerId)
-                        .update({
-                          "firstName": f,
-                          "lastName": l,
-                          "height": formattedHeight,
-                          "weight": formattedWeight,
-                          "number": formattedNumber,
-                          "photoUrl": tempPhoto ?? "",
+                        // Update Firestore
+                        await FirebaseFirestore.instance
+                            .collection("teams")
+                            .doc(widget.teamId)
+                            .collection("players")
+                            .doc(widget.playerId)
+                            .update({
+                              "firstName": f,
+                              "lastName": l,
+                              "height": formattedHeight,
+                              "weight": formattedWeight,
+                              "number": formattedNumber,
+                              "photoUrl": tempPhoto ?? "",
+                            });
+
+                        // Update UI immediately
+                        setState(() {
+                          firstName = f;
+                          lastName = l;
+                          number = formattedNumber;
+                          height = formattedHeight;
+                          weight = formattedWeight;
+                          photoUrl = tempPhoto;
                         });
 
-                    // Update UI immediately
-                    setState(() {
-                      firstName = f;
-                      lastName = l;
-                      number = formattedNumber;
-                      height = formattedHeight;
-                      weight = formattedWeight;
-                      photoUrl = tempPhoto;
-                    });
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 50),
+                Center(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text("Supprimer joueur"),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (_) {
+                          return AlertDialog(
+                            title: const Text("Supprimer ce joueur ?"),
+                            content: const Text("Cette action est définitive."),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text("Annuler"),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text(
+                                  "Supprimer",
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
 
-                    Navigator.pop(context);
-                  },
+                      if (confirm == true) {
+                        await FirebaseFirestore.instance
+                            .collection("teams")
+                            .doc(widget.teamId)
+                            .collection("players")
+                            .doc(widget.playerId)
+                            .delete();
+
+                        if (mounted) {
+                          Navigator.pop(context); // close edit dialog
+                          Navigator.pop(context); // back to team detail
+                        }
+                      }
+                    },
+                  ),
                 ),
               ],
             );
@@ -221,16 +296,15 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName =
-        number != null && number!.isNotEmpty
-            ? "N°${number!} • ${lastName.toUpperCase()} $firstName"
-            : "${lastName.toUpperCase()} $firstName";
+    final displayName = number != null && number!.isNotEmpty
+        ? "N°${number!} • ${lastName.toUpperCase()} $firstName"
+        : "${lastName.toUpperCase()} $firstName";
 
     return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset("assets/volley_bg2.png", fit: BoxFit.cover),
+          child: Image.asset("assets/volley_bg2.png", fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: Container(color: Colors.black.withOpacity(0.15)),
@@ -334,8 +408,8 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
                     hasNumber
                         ? number!
                         : (firstName.isNotEmpty
-                                ? firstName[0].toUpperCase()
-                                : "?"),
+                              ? firstName[0].toUpperCase()
+                              : "?"),
                     style: const TextStyle(
                       color: mikasaBlue,
                       fontSize: 40,
@@ -349,8 +423,7 @@ class _PlayerDetailPageState extends State<PlayerDetailPage> {
 
           if (hasNumber)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: mikasaBlue.withOpacity(0.08),
                 border: Border.all(color: mikasaBlue, width: 1),
