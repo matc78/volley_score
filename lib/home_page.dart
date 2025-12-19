@@ -63,7 +63,7 @@ class HomePage extends StatelessWidget {
 
                   // ---- Boutons ----
                   _HomeButton(
-                    label: "Créer / Modifier une équipe",
+                    label: "Équipes et Joueurs",
                     icon: Icons.group,
                     bgColor: mikasaBlue,
                     textColor: mikasaYellow,
