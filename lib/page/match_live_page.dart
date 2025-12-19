@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:volley_score/page/match_summary_page.dart';
 
 class MatchLivePage extends StatefulWidget {
   final String analyzedTeamId;
@@ -39,6 +40,9 @@ class _MatchLivePageState extends State<MatchLivePage>
   int setsOpp = 0;
   int currentSet = 1;
   bool setEnded = false;
+  bool matchFinished = false;
+  final ScrollController _timelineController = ScrollController();
+  String? opponentId;
 
   // pour annuler le dernier point
   String? lastEventId;
@@ -62,6 +66,7 @@ class _MatchLivePageState extends State<MatchLivePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _timelineController.dispose();
     super.dispose();
   }
 
@@ -75,7 +80,6 @@ class _MatchLivePageState extends State<MatchLivePage>
   }
 
   Future<void> _loadOpponentName() async {
-    String? opponentId;
     if (widget.analyzedTeamId == widget.homeTeamId) {
       opponentId = widget.awayTeamId;
     } else if (widget.analyzedTeamId == widget.awayTeamId) {
@@ -120,6 +124,7 @@ class _MatchLivePageState extends State<MatchLivePage>
         setsOpp = prefs.getInt("currentSetsOpp") ?? 0;
         currentSet = prefs.getInt("currentSetNumber") ?? 1;
         setEnded = prefs.getBool("currentSetEnded") ?? false;
+        matchFinished = prefs.getBool("currentMatchFinished") ?? false;
       });
     }
   }
@@ -139,6 +144,7 @@ class _MatchLivePageState extends State<MatchLivePage>
     await prefs.setInt("currentSetsOpp", setsOpp);
     await prefs.setInt("currentSetNumber", currentSet);
     await prefs.setBool("currentSetEnded", setEnded);
+    await prefs.setBool("currentMatchFinished", matchFinished);
   }
 
   Future<void> _clearSavedState() async {
@@ -155,6 +161,7 @@ class _MatchLivePageState extends State<MatchLivePage>
     await prefs.remove("currentSetsOpp");
     await prefs.remove("currentSetNumber");
     await prefs.remove("currentSetEnded");
+    await prefs.remove("currentMatchFinished");
   }
 
   Future<void> _createMatchDocument() async {
@@ -163,6 +170,7 @@ class _MatchLivePageState extends State<MatchLivePage>
       "analyzedTeamName": widget.analyzedTeamName,
       "homeTeamId": widget.homeTeamId,
       "awayTeamId": widget.awayTeamId,
+      "opponentName": opponentName,
       "starters": widget.starters,
       "liberoId": widget.liberoId,
       "ourScore": 0,
@@ -231,13 +239,47 @@ class _MatchLivePageState extends State<MatchLivePage>
                               backgroundColor: mikasaYellow,
                               foregroundColor: Colors.black,
                             ),
-                            onPressed: _startNextSet,
-                            child: const Text("Commencer le prochain set"),
+                            onPressed:
+                                matchFinished ? _finishMatchDirect : _startNextSet,
+                            child: Text(
+                              matchFinished
+                                  ? "Fin du match"
+                                  : "Commencer le prochain set",
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
+                    if (matchFinished)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white24),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => MatchSummaryPage(
+                                      matchId: matchId!,
+                                      analyzedTeamName: widget.analyzedTeamName,
+                                      opponentName: opponentName,
+                                      setNumber: null,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Text(
+                                "Récap match",
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -404,28 +446,40 @@ class _MatchLivePageState extends State<MatchLivePage>
         if (!snapshot.hasData) return const SizedBox();
 
         final events = snapshot.data!.docs;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_timelineController.hasClients) {
+            final max = _timelineController.position.maxScrollExtent;
+            _timelineController.jumpTo(max);
+          }
+        });
 
-        int ourPointNumber = 0;
-        int oppPointNumber = 0;
+        final Map<int, int> ourPointBySet = {};
+        final Map<int, int> oppPointBySet = {};
         final Map<String, int> pointNumberById = {};
 
         for (final doc in events) {
           final data = doc.data() as Map<String, dynamic>;
           final bool isSetEnd = data["isSetEnd"] == true;
           if (isSetEnd) continue;
+          final int setNum = (data["setNumber"] ?? 1) as int;
           final bool isOurPoint = data["isOurPoint"] == true;
-          final int number = isOurPoint ? ++ourPointNumber : ++oppPointNumber;
-          pointNumberById[doc.id] = number;
+          if (isOurPoint) {
+            final next = (ourPointBySet[setNum] ?? 0) + 1;
+            ourPointBySet[setNum] = next;
+            pointNumberById[doc.id] = next;
+          } else {
+            final next = (oppPointBySet[setNum] ?? 0) + 1;
+            oppPointBySet[setNum] = next;
+            pointNumberById[doc.id] = next;
+          }
         }
-
-        final reversedEvents = events.reversed.toList();
-
         return ListView.builder(
           reverse: true,
+          controller: _timelineController,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: reversedEvents.length,
+          itemCount: events.length,
           itemBuilder: (context, index) {
-            final e = reversedEvents[index];
+            final e = events[index];
             final bool isSetEnd =
                 (e.data() as Map<String, dynamic>)["isSetEnd"] ?? false;
             if (isSetEnd) {
@@ -455,7 +509,17 @@ class _MatchLivePageState extends State<MatchLivePage>
                         side: const BorderSide(color: Colors.white24),
                       ),
                       onPressed: () {
-                        // TODO: recap set à implémenter
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MatchSummaryPage(
+                              matchId: matchId!,
+                              analyzedTeamName: widget.analyzedTeamName,
+                              opponentName: opponentName,
+                              setNumber: setNumber,
+                            ),
+                          ),
+                        );
                       },
                       child: Text(
                         "Récap set $setNumber",
@@ -477,9 +541,7 @@ class _MatchLivePageState extends State<MatchLivePage>
                 ? e["scorerId"] as String?
                 : e["errorPlayerId"] as String?;
 
-            final pointNumber =
-                pointNumberById[e.id] ??
-                (isOurPoint ? ++ourPointNumber : ++oppPointNumber);
+            final pointNumber = pointNumberById[e.id] ?? 0;
 
             final bool isLeftSide = isSwapped
                 ? !isOurPoint
@@ -720,9 +782,14 @@ class _MatchLivePageState extends State<MatchLivePage>
     final actionType = await _chooseOurActionType();
     if (actionType == null) return;
 
-    // 2) joueur (avec restrictions libéro) sauf action collective
+    // 2) joueur (avec restrictions libéro) sauf action collective/erreur adverse
     String? playerId;
-    if (actionType != "L'équipe a fait n'imp") {
+    const noPlayerNeeded = {
+      "L'équipe a fait n'imp",
+      "Service adverse raté",
+      "Faute adverse (mordu/fil)",
+    };
+    if (!noPlayerNeeded.contains(actionType)) {
       playerId = await _choosePlayerForOurPoint(actionType);
     }
 
@@ -739,6 +806,7 @@ class _MatchLivePageState extends State<MatchLivePage>
       scorerId: playerId,
       isOurError: false,
       errorPlayerId: null,
+      setNumber: currentSet,
     );
 
     await _checkSetEnd();
@@ -757,6 +825,8 @@ class _MatchLivePageState extends State<MatchLivePage>
       "Block-out subi",
       "Block raté",
       "Défense ratée",
+      "Service raté",
+      "Faute (mordu/fil)",
     };
     const collectiveTeamTypes = {
       "L'équipe a fait n'imp",
@@ -787,6 +857,7 @@ class _MatchLivePageState extends State<MatchLivePage>
       scorerId: null,
       isOurError: isOurError,
       errorPlayerId: errorPlayerId,
+      setNumber: currentSet,
     );
 
     await _checkSetEnd();
@@ -803,6 +874,7 @@ class _MatchLivePageState extends State<MatchLivePage>
     String? scorerId,
     required bool isOurError,
     String? errorPlayerId,
+    required int setNumber,
   }) async {
     if (matchId == null) return;
 
@@ -817,6 +889,7 @@ class _MatchLivePageState extends State<MatchLivePage>
       "scorerId": scorerId,
       "isOurError": isOurError,
       "errorPlayerId": errorPlayerId,
+      "setNumber": setNumber,
       "ourScoreAfter": ourScore,
       "oppScoreAfter": oppScore,
       "createdAt": DateTime.now(),
@@ -844,11 +917,24 @@ class _MatchLivePageState extends State<MatchLivePage>
           "oppScoreAfter": oppScore,
           "createdAt": DateTime.now(),
         });
+    // stocker un summary simple dans matches/{matchId}/sets/{currentSet}
+    await FirebaseFirestore.instance
+        .collection("matches")
+        .doc(matchId)
+        .collection("sets")
+        .doc("set_$currentSet")
+        .set({
+          "setNumber": currentSet,
+          "winnerIsUs": winnerIsUs,
+          "ourScore": ourScore,
+          "oppScore": oppScore,
+          "createdAt": DateTime.now(),
+        });
   }
 
   Future<void> _checkSetEnd() async {
-    if (setEnded) return;
-    const target = 25;
+    if (setEnded || matchFinished) return;
+    final target = currentSet == 5 ? 15 : 25;
     if (ourScore >= target || oppScore >= target) {
       final winnerIsUs = ourScore > oppScore;
       setState(() {
@@ -858,6 +944,9 @@ class _MatchLivePageState extends State<MatchLivePage>
         } else {
           setsOpp++;
         }
+        if (setsUs == 3 || setsOpp == 3 || currentSet == 5) {
+          matchFinished = true;
+        }
       });
       await _addSetEndEvent(winnerIsUs);
       await _persistState();
@@ -865,6 +954,7 @@ class _MatchLivePageState extends State<MatchLivePage>
   }
 
   Future<void> _startNextSet() async {
+    if (matchFinished || currentSet >= 5) return;
     setState(() {
       currentSet++;
       ourScore = 0;
@@ -923,7 +1013,9 @@ class _MatchLivePageState extends State<MatchLivePage>
       "Relance gagnante",
       "Bidouille",
       "Placée à 10 doigts",
-      "L'équipe adverse a fait n'imp",
+      "L'équipe a fait n'imp",
+      "Service adverse raté",
+      "Faute adverse (mordu/fil)",
     ];
 
     return showModalBottomSheet<String>(
@@ -969,6 +1061,8 @@ class _MatchLivePageState extends State<MatchLivePage>
       "Attaque adverse",
       "Bidouille adverse",
       "Placée adverse",
+      "Service raté",
+      "Faute (mordu/fil)",
       "L'équipe a fait n'imp",
     ];
 
@@ -1211,9 +1305,38 @@ class _MatchLivePageState extends State<MatchLivePage>
           .doc(matchId)
           .update({"isFinished": true});
 
+      await _saveMatchResume();
       await _clearSavedState();
 
       if (mounted) Navigator.pop(context);
     }
+  }
+
+  Future<void> _finishMatchDirect() async {
+    await _confirmFinishMatch();
+    if (mounted) {
+      Navigator.popUntil(context, (route) => route.isFirst);
+    }
+  }
+
+  Future<void> _saveMatchResume() async {
+    if (matchId == null) return;
+    final oppId = opponentId ??
+        (widget.analyzedTeamId == widget.homeTeamId
+            ? widget.awayTeamId
+            : widget.homeTeamId);
+
+    await FirebaseFirestore.instance
+        .collection("teams")
+        .doc(widget.analyzedTeamId)
+        .collection("matchs")
+        .doc(matchId)
+        .set({
+          "opponentId": oppId,
+          "opponentName": opponentName,
+          "setsUs": setsUs,
+          "setsOpp": setsOpp,
+          "createdAt": DateTime.now(),
+        });
   }
 }
