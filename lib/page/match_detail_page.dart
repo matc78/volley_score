@@ -1,12 +1,8 @@
-// ignore_for_file: unused_local_variable
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fl_chart/fl_chart.dart';
 
-class MatchDetailPage extends StatelessWidget {
-  static const mikasaBlue = Color(0xFF0033A0);
-  static const mikasaYellow = Color(0xFFF5F12D);
-
+class MatchDetailPage extends StatefulWidget {
   final String teamId;
   final String teamName;
   final String opponentName;
@@ -21,22 +17,35 @@ class MatchDetailPage extends StatelessWidget {
   });
 
   @override
+  State<MatchDetailPage> createState() => _MatchDetailPageState();
+}
+
+class _MatchDetailPageState extends State<MatchDetailPage>
+    with SingleTickerProviderStateMixin {
+  static const mikasaBlue = Color(0xFF0033A0);
+
+  late Future<_MatchSummary> _future;
+  late AnimationController _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadSummary();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: mikasaBlue,
-        title: Text(
-          "VS ${opponentName.toUpperCase()}",
-          style: const TextStyle(
-            color: mikasaBlue,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
       body: Stack(
         children: [
           Positioned.fill(
@@ -45,171 +54,122 @@ class MatchDetailPage extends StatelessWidget {
           Positioned.fill(
             child: Container(color: Colors.black.withOpacity(0.15)),
           ),
-          Positioned.fill(
-            child: FutureBuilder<_MatchSummary>(
-              future: _loadSummary(),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  if (snap.hasError) {
-                    return Center(
-                      child: Text(
-                        "Erreur: ${snap.error}",
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    );
-                  }
-                  return const Center(child: CircularProgressIndicator());
-                }
+          SafeArea(
+            child: Column(
+              children: [
+                _topBar(context),
+                Expanded(
+                  child: FutureBuilder<_MatchSummary>(
+                    future: _future,
+                    builder: (context, snap) {
+                      if (!snap.hasData) {
+                        if (snap.hasError) {
+                          return Center(
+                            child: Text(
+                              "Erreur : ${snap.error}",
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          );
+                        }
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                final summary = snap.data!;
+                      final s = snap.data!;
+                      return FadeTransition(
+                        opacity: _anim,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              _headerScore(s),
+                              const SizedBox(height: 16),
 
-                return SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _headerScore(summary),
-                        const SizedBox(height: 12),
-
-                        // MEILLEURS JOUEURS
-                        _sectionCard(
-                          title: "Meilleurs joueurs",
-                          children: summary.bestPlayers.isEmpty
-                              ? [
-                                  const Text(
-                                    "Aucun",
-                                    style: TextStyle(color: Colors.black54),
-                                  ),
-                                ]
-                              : summary.bestPlayers.map((e) {
-                                  return Text(
-                                    "${e.name} : ${e.value} pts",
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  );
-                                }).toList(),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // JOUEURS LES PLUS PENALISÉS
-                        _sectionCard(
-                          title: "Joueurs les plus pénalisés",
-                          children: summary.worstPlayers.isEmpty
-                              ? [
-                                  const Text(
-                                    "Aucun",
-                                    style: TextStyle(color: Colors.black54),
-                                  ),
-                                ]
-                              : summary.worstPlayers.map((e) {
-                                  return Text(
-                                    "${_shortName(e.name)} : ${e.value} pts donnés",
-                                    style: const TextStyle(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  );
-                                }).toList(),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // ACTIONS COLLECTIVES EQUIPE
-                        if (summary.teamActionsNoPlayer.isNotEmpty)
-                          _sectionCard(
-                            title: "Actions équipe (collectif)",
-                            children: summary.teamActionsNoPlayer.entries.map((
-                              e,
-                            ) {
-                              final pct = summary.totalFor > 0
-                                  ? ((e.value / summary.totalFor) * 100)
-                                        .toStringAsFixed(1)
-                                  : "0";
-                              return Text(
-                                "${e.key} : ${e.value} pts ($pct%)",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-
-                        const SizedBox(height: 10),
-
-                        // DETAILS PAR ACTION (TOP JOUEURS)
-                        if (summary.topByAction.isNotEmpty)
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: summary.topByAction.entries.map((entry) {
-                              final action = entry.key;
-                              final tops = entry.value;
-
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.85),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: mikasaBlue.withOpacity(0.3),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              _buildCard(
+                                title: "Totaux",
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    Text(
-                                      action,
-                                      style: const TextStyle(
-                                        color: mikasaBlue,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                    _pill(
+                                      "${widget.teamName} : ${s.totalFor}",
+                                      mikasaBlue,
                                     ),
-                                    const SizedBox(height: 6),
-                                    ...tops.map(
-                                      (e) => Text(
-                                        "${_shortName(e.name)} : ${e.value} pts",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                    _pill(
+                                      "${widget.opponentName} : ${s.totalAgainst}",
+                                      Colors.red,
                                     ),
                                   ],
                                 ),
-                              );
-                            }).toList(),
-                          ),
+                              ),
 
-                        const SizedBox(height: 10),
+                              const SizedBox(height: 16),
+                              _buildBarChart(s),
 
-                        // DETAIL DES SETS
-                        const Text(
-                          "Détail par set",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                              const SizedBox(height: 16),
+                              _buildCard(
+                                title: "Meilleurs marqueurs",
+                                child: _listPlayers(
+                                  s.bestPlayers,
+                                  suffix: "pts",
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+                              _buildCard(
+                                title: "Joueurs les plus pénalisés",
+                                titleColor: Colors.red,
+                                child: _listPlayers(
+                                  s.worstPlayers,
+                                  suffix: "pts donnés",
+                                ),
+                              ),
+
+                              if (s.teamActionsNoPlayer.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _buildCard(
+                                  title:
+                                      "Actions gagnées (collectif / sans joueur)",
+                                  child: _listActions(s.teamActionsNoPlayer),
+                                ),
+                              ],
+
+                              if (s.topByAction.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _buildTopActionsGrid(
+                                  s.topByAction,
+                                  s.totalFor,
+                                  mikasaBlue,
+                                ),
+                              ],
+
+                              if (s.topByActionOpp.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _buildTopActionsGrid(
+                                  s.topByActionOpp,
+                                  s.totalAgainst,
+                                  Colors.red,
+                                ),
+                              ],
+
+                              if (s.oppActionsNoPlayer.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _buildCard(
+                                  title:
+                                      "Actions concédées (collectif / sans joueur)",
+                                  titleColor: Colors.red,
+                                  child: _listActions(s.oppActionsNoPlayer),
+                                ),
+                              ],
+
+                              const SizedBox(height: 24),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-
-                        ...summary.sets.map(
-                          (s) => _SetExpansion(
-                            matchId: matchId,
-                            setNumber: s.setNumber,
-                            ourScore: s.our,
-                            oppScore: s.opp,
-                            teamId: teamId,
-                          ),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
         ],
@@ -217,312 +177,384 @@ class MatchDetailPage extends StatelessWidget {
     );
   }
 
-  // ---------------- HEADER SCORE ----------------
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
 
-  Widget _headerScore(_MatchSummary summary) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: mikasaBlue.withOpacity(0.4)),
-      ),
-      child: Column(
+  Widget _topBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
         children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back, color: mikasaBlue),
+          ),
+          const Spacer(),
           Text(
-            "${teamName.toUpperCase()}  ${summary.setsUs} - ${summary.setsOpp}  ${opponentName.toUpperCase()}",
+            "VS ${widget.opponentName.toUpperCase()}",
             style: const TextStyle(
               color: mikasaBlue,
-              fontSize: 18,
               fontWeight: FontWeight.bold,
+              fontSize: 22,
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 4),
-          Text(
-            "Scores sets : ${summary.setScoresText}",
-            style: const TextStyle(color: Colors.black87),
-          ),
+          const Spacer(),
+          const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  // ---------------- SECTION CARD ----------------
+  Widget _headerScore(_MatchSummary s) {
+    return _buildCard(
+      title:
+          "${widget.teamName.toUpperCase()} ${s.setsUs} - ${s.setsOpp} ${widget.opponentName.toUpperCase()}",
+      child: Text(
+        "Scores sets : ${s.setScoresText}",
+        style: const TextStyle(color: Colors.black54),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
 
-  Widget _sectionCard({required String title, required List<Widget> children}) {
+  Widget _pill(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildCard({
+    required String title,
+    required Widget child,
+    Color titleColor = mikasaBlue,
+  }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: mikasaBlue.withOpacity(0.3)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 10,
+            offset: Offset(0, 4),
+            color: Colors.black12,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: const TextStyle(
-              color: mikasaBlue,
-              fontWeight: FontWeight.bold,
+            style: TextStyle(
+              color: titleColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
             ),
           ),
-          const SizedBox(height: 6),
-          ...children,
+          const SizedBox(height: 10),
+          child,
         ],
       ),
     );
   }
 
-  // ---------------- LOAD SUMMARY CLEAN ----------------
+  Widget _listPlayers(List<_Entry> list, {required String suffix}) {
+    if (list.isEmpty) {
+      return const Text("Aucun", style: TextStyle(color: Colors.black54));
+    }
+    return Column(
+      children: list
+          .map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(child: Text(e.name)),
+                  Text(
+                    "${e.value} $suffix",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _listActions(Map<String, int> map) {
+    final entries = map.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: entries
+          .map(
+            (e) => Chip(
+              label: Text("${e.key} : ${e.value}"),
+              backgroundColor: Colors.grey.shade200,
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildTopActionsGrid(
+    Map<String, List<_Entry>> map,
+    int total,
+    Color color,
+  ) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: map.entries.map((entry) {
+        return Container(
+          width: 180,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                entry.key,
+                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              ...entry.value.map((e) => Text("${e.name} : ${e.value}")),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildBarChart(_MatchSummary s) {
+    if (s.bestPlayers.isEmpty) {
+      return _buildCard(
+        title: "Graphique des marqueurs",
+        child: const Text("Pas de données"),
+      );
+    }
+
+    final bars = s.bestPlayers.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final e = entry.value;
+      return BarChartGroupData(
+        x: idx,
+        barRods: [
+          BarChartRodData(
+            toY: e.value.toDouble(),
+            color: mikasaBlue,
+            width: 18,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ],
+      );
+    }).toList();
+
+    return _buildCard(
+      title: "Graphique des marqueurs",
+      child: SizedBox(
+        height: 220,
+        child: BarChart(
+          BarChartData(
+            alignment: BarChartAlignment.spaceAround,
+            barGroups: bars,
+            gridData: const FlGridData(show: true),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+              leftTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: true, reservedSize: 28),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 36,
+                  getTitlesWidget: (value, meta) {
+                    final idx = value.toInt();
+                    if (idx < 0 || idx >= s.bestPlayers.length) {
+                      return const SizedBox.shrink();
+                    }
+                    final label = _extractNumberLabel(s.bestPlayers[idx].name);
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _extractNumberLabel(String fullName) {
+    final match = RegExp(r"N°\s*([0-9]+)").firstMatch(fullName);
+    if (match != null) return match.group(1)!;
+    return fullName;
+  }
+
+  // ---------------------------------------------------------------------------
+  // DATA
+  // ---------------------------------------------------------------------------
 
   Future<_MatchSummary> _loadSummary() async {
-    final matchDoc = await FirebaseFirestore.instance
-        .collection("matches")
-        .doc(matchId)
-        .get();
-    final matchData = matchDoc.data() ?? {};
-
-    // LOAD SETS
     final setsSnap = await FirebaseFirestore.instance
         .collection("matches")
-        .doc(matchId)
+        .doc(widget.matchId)
         .collection("sets")
         .orderBy("setNumber")
         .get();
 
-    final setEntries = setsSnap.docs.map((d) {
-      return _SetScore(
-        setNumber: d["setNumber"] ?? 0,
-        our: d["ourScore"] ?? 0,
-        opp: d["oppScore"] ?? 0,
-        winnerIsUs: d["winnerIsUs"] == true,
-      );
-    }).toList();
+    final sets = setsSnap.docs
+        .map(
+          (d) => _SetScore(
+            setNumber: d["setNumber"],
+            our: d["ourScore"],
+            opp: d["oppScore"],
+            winnerIsUs: d["winnerIsUs"] == true,
+          ),
+        )
+        .toList();
 
-    final setsUs = setEntries.where((s) => s.winnerIsUs).length;
-    final setsOpp = setEntries.length - setsUs;
+    final totalFor = sets.fold<int>(0, (p, s) => p + s.our);
+    final totalAgainst = sets.fold<int>(0, (p, s) => p + s.opp);
 
-    // LOAD EVENTS
-    final events = await FirebaseFirestore.instance
-        .collection("matches")
-        .doc(matchId)
-        .collection("events")
-        .get();
-
-    // LOAD PLAYERS
     final playersSnap = await FirebaseFirestore.instance
         .collection("teams")
-        .doc(teamId)
+        .doc(widget.teamId)
         .collection("players")
         .get();
 
     final playerNames = {
-      for (var p in playersSnap.docs)
+      for (final p in playersSnap.docs)
         p.id:
-            "${(p["lastName"] ?? '').toString().toUpperCase()} ${p["firstName"] ?? ''}"
-                .trim(),
+            "N°${p["number"] ?? ""} ${(p["lastName"] ?? "").toString().toUpperCase()} ${(p["firstName"] ?? "")}",
     };
 
-    int totalFor = 0;
-    int totalAgainst = 0;
+    final eventsSnap = await FirebaseFirestore.instance
+        .collection("matches")
+        .doc(widget.matchId)
+        .collection("events")
+        .get();
 
-    final best = <String, int>{};
-    final worst = <String, int>{};
+    final Map<String, int> best = {};
+    final Map<String, int> worst = {};
+    final Map<String, int> teamNo = {};
+    final Map<String, int> oppNo = {};
+    final Map<String, Map<String, int>> byAction = {};
+    final Map<String, Map<String, int>> byActionOpp = {};
 
-    final byAction = <String, Map<String, int>>{};
-    final teamNoPlayer = <String, int>{};
+    for (final d in eventsSnap.docs) {
+      final data = d.data();
+      if (!data.containsKey("isOurPoint")) continue;
 
-    final topOppByAction = <String, Map<String, int>>{};
-    final oppNoPlayer = <String, int>{};
-
-    for (final evt in events.docs) {
-      final data = evt.data();
-      final bool isUs = data["isOurPoint"] == true;
-      final bool isErr = data["isOurError"] == true;
-      final String action = (data["actionType"] ?? "").toString();
-      final scorer = data["scorerId"];
-      final err = data["errorPlayerId"];
+      final isUs = data["isOurPoint"] == true;
+      final action = (data["actionType"] ?? "Collectif").toString();
+      final scorer = (data["scorerId"] ?? "").toString();
+      final err = (data["errorPlayerId"] ?? "").toString();
+      final isErr = data["isOurError"] == true;
 
       if (isUs) {
-        totalFor++;
-
-        if (scorer == null) {
-          teamNoPlayer[action] = (teamNoPlayer[action] ?? 0) + 1;
-        } else {
+        if (scorer.isNotEmpty) {
           best[scorer] = (best[scorer] ?? 0) + 1;
           byAction.putIfAbsent(action, () => {});
           byAction[action]![scorer] = (byAction[action]![scorer] ?? 0) + 1;
+        } else {
+          teamNo[action] = (teamNo[action] ?? 0) + 1;
         }
       } else {
-        totalAgainst++;
-
-        if (err == null) {
-          oppNoPlayer[action] = (oppNoPlayer[action] ?? 0) + 1;
-        } else {
+        if (isErr && err.isNotEmpty) {
           worst[err] = (worst[err] ?? 0) + 1;
-          topOppByAction.putIfAbsent(action, () => {});
-          topOppByAction[action]![err] =
-              (topOppByAction[action]![err] ?? 0) + 1;
+          byActionOpp.putIfAbsent(action, () => {});
+          byActionOpp[action]![err] = (byActionOpp[action]![err] ?? 0) + 1;
+        } else {
+          oppNo[action] = (oppNo[action] ?? 0) + 1;
         }
       }
     }
 
-    final bestPlayers =
-        best.entries
-            .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
-            .toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-
-    final worstPlayers =
-        worst.entries
-            .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
-            .toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-
-    final topByAction = {
-      for (var entry in byAction.entries)
-        entry.key:
-            entry.value.entries
-                .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
-                .toList()
-              ..sort((a, b) => b.value.compareTo(a.value)),
-    };
-
-    final topByActionOpp = {
-      for (var entry in topOppByAction.entries)
-        entry.key:
-            entry.value.entries
-                .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
-                .toList()
-              ..sort((a, b) => b.value.compareTo(a.value)),
-    };
+    Map<String, List<_Entry>> mapToEntries(Map<String, Map<String, int>> src) {
+      return src.map(
+        (k, v) => MapEntry(
+          k,
+          v.entries
+              .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
+              .toList()
+            ..sort((a, b) => b.value.compareTo(a.value)),
+        ),
+      );
+    }
 
     return _MatchSummary(
-      setsUs: setsUs,
-      setsOpp: setsOpp,
+      setsUs: sets.where((s) => s.winnerIsUs).length,
+      setsOpp: sets.where((s) => !s.winnerIsUs).length,
       totalFor: totalFor,
       totalAgainst: totalAgainst,
-      setScoresText: setEntries.map((s) => "${s.our}-${s.opp}").join(" / "),
-      sets: setEntries,
-      bestPlayers: bestPlayers.take(3).toList(),
-      worstPlayers: worstPlayers.take(3).toList(),
-      topByAction: topByAction,
-      topByActionOpp: topByActionOpp,
-      teamActionsNoPlayer: teamNoPlayer,
-      oppActionsNoPlayer: oppNoPlayer,
+      setScoresText: sets.map((s) => "${s.our}-${s.opp}").join(" / "),
+      sets: sets,
+      bestPlayers:
+          best.entries
+              .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
+              .toList()
+            ..sort((a, b) => b.value.compareTo(a.value)),
+      worstPlayers:
+          worst.entries
+              .map((e) => _Entry(playerNames[e.key] ?? e.key, e.value))
+              .toList()
+            ..sort((a, b) => b.value.compareTo(a.value)),
+      teamActionsNoPlayer: teamNo,
+      oppActionsNoPlayer: oppNo,
+      topByAction: mapToEntries(byAction),
+      topByActionOpp: mapToEntries(byActionOpp),
+      playerNames: playerNames,
+      playerPhotos: const {},
     );
   }
 }
 
-class _SetExpansion extends StatelessWidget {
-  final String matchId;
-  final int setNumber;
-  final int ourScore;
-  final int oppScore;
-  final String teamId;
-
-  const _SetExpansion({
-    required this.matchId,
-    required this.setNumber,
-    required this.ourScore,
-    required this.oppScore,
-    required this.teamId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ExpansionTile(
-        title: Text("Set $setNumber : $ourScore - $oppScore"),
-        children: [
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection("matches")
-                .doc(matchId)
-                .collection("events")
-                .where("setNumber", isEqualTo: setNumber)
-                .orderBy("createdAt")
-                .snapshots(),
-            builder: (context, snap) {
-              if (!snap.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: CircularProgressIndicator(),
-                );
-              }
-
-              final evts = snap.data!.docs;
-
-              if (evts.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text("Aucun événement"),
-                );
-              }
-
-              return FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection("teams")
-                    .doc(teamId)
-                    .collection("players")
-                    .get(),
-                builder: (context, playersSnap) {
-                  if (!playersSnap.hasData) return Container();
-
-                  final players = {
-                    for (var p in playersSnap.data!.docs)
-                      p.id:
-                          "${(p["lastName"] ?? '').toString().toUpperCase()} ${p["firstName"] ?? ''}",
-                  };
-
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: evts.length,
-                    itemBuilder: (context, idx) {
-                      final data = evts[idx].data() as Map<String, dynamic>;
-                      final bool isUs = data["isOurPoint"] == true;
-                      final action = (data["actionType"] ?? "").toString();
-
-                      final scorerId = data["scorerId"];
-                      final errId = data["errorPlayerId"];
-
-                      String who = "Collectif";
-
-                      if (scorerId != null) {
-                        who = players[scorerId] ?? scorerId;
-                      } else if (errId != null) {
-                        who = players[errId] ?? errId;
-                      }
-
-                      return ListTile(
-                        leading: Icon(
-                          isUs ? Icons.arrow_upward : Icons.arrow_downward,
-                          color: isUs ? Colors.blue : Colors.red,
-                        ),
-                        title: Text(action.isNotEmpty ? action : "Événement"),
-                        subtitle: Text(who),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ---------------------------------------------------------------------------
+// MODELS
+// ---------------------------------------------------------------------------
 
 class _SetScore {
   final int setNumber;
   final int our;
   final int opp;
   final bool winnerIsUs;
+
   _SetScore({
     required this.setNumber,
     required this.our,
@@ -544,12 +576,18 @@ class _MatchSummary {
   final int totalAgainst;
   final String setScoresText;
   final List<_SetScore> sets;
+
   final List<_Entry> bestPlayers;
   final List<_Entry> worstPlayers;
-  final Map<String, List<_Entry>> topByAction;
-  final Map<String, List<_Entry>> topByActionOpp;
+
   final Map<String, int> teamActionsNoPlayer;
   final Map<String, int> oppActionsNoPlayer;
+
+  final Map<String, List<_Entry>> topByAction;
+  final Map<String, List<_Entry>> topByActionOpp;
+
+  final Map<String, String> playerNames;
+  final Map<String, String> playerPhotos;
 
   _MatchSummary({
     required this.setsUs,
@@ -560,15 +598,11 @@ class _MatchSummary {
     required this.sets,
     required this.bestPlayers,
     required this.worstPlayers,
-    required this.topByAction,
-    required this.topByActionOpp,
     required this.teamActionsNoPlayer,
     required this.oppActionsNoPlayer,
+    required this.topByAction,
+    required this.topByActionOpp,
+    required this.playerNames,
+    required this.playerPhotos,
   });
-}
-
-String _shortName(String full) {
-  final parts = full.trim().split(" ");
-  if (parts.length <= 1) return full;
-  return "${parts[0][0].toUpperCase()}. ${parts.sublist(1).join(" ")}";
 }
