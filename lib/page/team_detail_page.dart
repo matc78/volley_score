@@ -473,21 +473,19 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                     TextField(
                       controller: numberController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Numéro (optionnel)",
-                      ),
+                      decoration: const InputDecoration(labelText: "Numéro"),
                     ),
 
                     // Prénom
                     TextField(
                       controller: firstNameController,
-                      decoration: const InputDecoration(labelText: "Prénom *"),
+                      decoration: const InputDecoration(labelText: "Prénom"),
                     ),
 
                     // Nom
                     TextField(
                       controller: lastNameController,
-                      decoration: const InputDecoration(labelText: "Nom *"),
+                      decoration: const InputDecoration(labelText: "Nom"),
                     ),
 
                     // Taille
@@ -531,15 +529,22 @@ class _TeamDetailPageState extends State<TeamDetailPage>
                     String height = heightController.text.trim();
                     String weight = weightController.text.trim();
 
-                    if (first.isEmpty || last.isEmpty) return;
+                    // Au moins une info requise (numéro, prénom ou nom)
+                    if (first.isEmpty && last.isEmpty && number.isEmpty) {
+                      return;
+                    }
 
                     // Formatage du prénom
-                    first =
-                        first[0].toUpperCase() +
-                        first.substring(1).toLowerCase();
+                    if (first.isNotEmpty) {
+                      first =
+                          first[0].toUpperCase() +
+                          first.substring(1).toLowerCase();
+                    }
 
                     // Formatage du nom
-                    last = last.toUpperCase();
+                    if (last.isNotEmpty) {
+                      last = last.toUpperCase();
+                    }
 
                     await FirebaseFirestore.instance
                         .collection("teams")
