@@ -42,6 +42,7 @@ class _MatchLivePageState extends State<MatchLivePage>
   bool setEnded = false;
   bool matchFinished = false;
   final ScrollController _timelineController = ScrollController();
+  late Set<String> activePlayers;
   String? opponentId;
 
   // pour annuler le dernier point
@@ -54,6 +55,7 @@ class _MatchLivePageState extends State<MatchLivePage>
   @override
   void initState() {
     super.initState();
+    activePlayers = widget.starters.toSet();
     WidgetsBinding.instance.addObserver(this);
     _loadOpponentName();
     _restoreSavedState().then((_) {
@@ -284,7 +286,14 @@ class _MatchLivePageState extends State<MatchLivePage>
                 ),
               ),
             const SizedBox(height: 10),
-            _buildUndoButton(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildUndoButton(),
+                const SizedBox(width: 12),
+                _buildSubstitutionButton(),
+              ],
+            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -459,6 +468,7 @@ class _MatchLivePageState extends State<MatchLivePage>
 
         for (final doc in events) {
           final data = doc.data() as Map<String, dynamic>;
+          if (data["isSubstitution"] == true) continue;
           final bool isSetEnd = data["isSetEnd"] == true;
           if (isSetEnd) continue;
           final int setNum = (data["setNumber"] ?? 1) as int;
@@ -480,8 +490,8 @@ class _MatchLivePageState extends State<MatchLivePage>
           itemCount: events.length,
           itemBuilder: (context, index) {
             final e = events[index];
-            final bool isSetEnd =
-                (e.data() as Map<String, dynamic>)["isSetEnd"] ?? false;
+            final data = e.data() as Map<String, dynamic>;
+            final bool isSetEnd = data["isSetEnd"] == true;
             if (isSetEnd) {
               final int setNumber = (e["setNumber"] ?? currentSet) as int;
               final bool winnerIsUs = e["winnerIsUs"] == true;
@@ -532,9 +542,18 @@ class _MatchLivePageState extends State<MatchLivePage>
               );
             }
 
-            final bool isOurPoint = e["isOurPoint"] == true;
+            if (data["isSubstitution"] == true) {
+              final inName = (data["inName"] ?? "Entrée") as String;
+              final outName = (data["outName"] ?? "Sortie") as String;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _buildSubstitutionRow(inName, outName),
+              );
+            }
+
+            final bool isOurPoint = data["isOurPoint"] == true;
             final String actionType =
-                (e["actionType"] ?? "") as String; // peut être vide
+                (data["actionType"] ?? "") as String; // peut être vide
 
             // Id du joueur à afficher : marqueur pour nous, "coupable" pour eux
             final String? scorerId = isOurPoint
@@ -734,6 +753,42 @@ class _MatchLivePageState extends State<MatchLivePage>
     }
   }
 
+  Widget _buildSubstitutionRow(String inName, String outName) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: mikasaYellow.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.swap_horiz, color: Colors.white70, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Changement",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "$inName pour $outName",
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUndoButton() {
     return TextButton.icon(
       onPressed: (matchId != null && lastEventId != null) ? _undoLast : null,
@@ -743,6 +798,281 @@ class _MatchLivePageState extends State<MatchLivePage>
         style: TextStyle(color: Colors.white70),
       ),
     );
+  }
+
+  Widget _buildSubstitutionButton() {
+    return TextButton.icon(
+      onPressed: _showSubstitutionDialog,
+      icon: const Icon(Icons.swap_horiz, color: Colors.white70),
+      label: const Text(
+        "Changement",
+        style: TextStyle(color: Colors.white70),
+      ),
+    );
+  }
+
+  Future<void> _showSubstitutionDialog() async {
+    final snap = await FirebaseFirestore.instance
+        .collection("teams")
+        .doc(widget.analyzedTeamId)
+        .collection("players")
+        .orderBy("lastName")
+        .get();
+
+    List<DocumentSnapshot> players = snap.docs;
+
+    List<DocumentSnapshot> activeList() => players
+        .where((p) => activePlayers.contains(p.id) && p.id != widget.liberoId)
+        .toList();
+    List<DocumentSnapshot> benchList() => players
+        .where((p) => !activePlayers.contains(p.id) && p.id != widget.liberoId)
+        .toList();
+
+    if (activeList().isEmpty || benchList().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Aucun changement possible.")),
+      );
+      return;
+    }
+
+    String? outId = activeList().isNotEmpty ? activeList().first.id : null;
+    String? inId = benchList().isNotEmpty ? benchList().first.id : null;
+
+    await showDialog(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final active = activeList();
+            final bench = benchList();
+
+            return AlertDialog(
+              backgroundColor: Colors.black87,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: const [
+                  Icon(Icons.swap_horiz, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text(
+                    "Changement de joueur",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Sort :",
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: outId,
+                    dropdownColor: Colors.black87,
+                    iconEnabledColor: Colors.white,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _dropdownDecoration(),
+                    items: active
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p.id,
+                            child: Text(_formatPlayer(p)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setModalState(() => outId = v),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "Entre :",
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: inId,
+                    dropdownColor: Colors.black87,
+                    iconEnabledColor: Colors.white,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _dropdownDecoration(),
+                    items: bench
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p.id,
+                            child: Text(_formatPlayer(p)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setModalState(() => inId = v),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final added = await _quickAddPlayer();
+                        if (added != null) {
+                          setModalState(() {
+                            players = [...players, added];
+                            if (inId == null) inId = added.id;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.add, color: Colors.white70),
+                      label: const Text(
+                        "Ajouter un joueur",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  child: const Text("Annuler",
+                      style: TextStyle(color: Colors.white70)),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: mikasaYellow,
+                    foregroundColor: Colors.black,
+                  ),
+                  onPressed: (outId != null && inId != null)
+                      ? () async {
+                          setState(() {
+                            activePlayers.remove(outId);
+                            activePlayers.add(inId!);
+                          });
+                          final outPlayer =
+                              players.firstWhere((p) => p.id == outId);
+                          final inPlayer = players.firstWhere((p) => p.id == inId);
+                          await _addSubstitutionEvent(
+                            outId!,
+                            inId!,
+                            _formatPlayer(outPlayer),
+                            _formatPlayer(inPlayer),
+                          );
+                          Navigator.pop(context);
+                        }
+                      : null,
+                  child: const Text("Valider"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  InputDecoration _dropdownDecoration() {
+    return InputDecoration(
+      filled: true,
+      fillColor: Colors.white10,
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Colors.white24),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: mikasaYellow),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
+  }
+
+  String _formatPlayer(DocumentSnapshot p) {
+    final number = (p["number"] ?? "").toString();
+    final first = (p["firstName"] ?? "").toString();
+    final last = (p["lastName"] ?? "").toString();
+    final displayNumber = number.isNotEmpty ? "N°$number " : "";
+    return "$displayNumber${last.toUpperCase()} $first";
+  }
+
+  Future<DocumentSnapshot?> _quickAddPlayer() async {
+    final numberCtrl = TextEditingController();
+    final firstCtrl = TextEditingController();
+    final lastCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: Colors.black,
+          title: const Text(
+            "Nouveau joueur",
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: numberCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Numéro",
+                  labelStyle: TextStyle(color: Colors.white70),
+                ),
+              ),
+              TextField(
+                controller: firstCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Prénom",
+                  labelStyle: TextStyle(color: Colors.white70),
+                ),
+              ),
+              TextField(
+                controller: lastCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Nom",
+                  labelStyle: TextStyle(color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child:
+                  const Text("Annuler", style: TextStyle(color: Colors.white70)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Ajouter", style: TextStyle(color: mikasaYellow)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return null;
+
+    final first = firstCtrl.text.trim();
+    final last = lastCtrl.text.trim();
+    final number = numberCtrl.text.trim();
+
+    if (first.isEmpty && last.isEmpty && number.isEmpty) return null;
+
+    final ref = await FirebaseFirestore.instance
+        .collection("teams")
+        .doc(widget.analyzedTeamId)
+        .collection("players")
+        .add({
+          "firstName": first,
+          "lastName": last.toUpperCase(),
+          "number": number,
+          "photoUrl": "",
+          "createdAt": DateTime.now(),
+        });
+
+    return ref.get();
   }
 
   Future<bool> _confirmExit() async {
@@ -901,6 +1231,30 @@ class _MatchLivePageState extends State<MatchLivePage>
       "ourScore": ourScore,
       "oppScore": oppScore,
     });
+  }
+
+  Future<void> _addSubstitutionEvent(
+    String outId,
+    String inId,
+    String outName,
+    String inName,
+  ) async {
+    if (matchId == null) return;
+    await FirebaseFirestore.instance
+        .collection("matches")
+        .doc(matchId)
+        .collection("events")
+        .add({
+          "isSubstitution": true,
+          "outId": outId,
+          "inId": inId,
+          "outName": outName,
+          "inName": inName,
+          "setNumber": currentSet,
+          "ourScoreAfter": ourScore,
+          "oppScoreAfter": oppScore,
+          "createdAt": DateTime.now(),
+        });
   }
 
   Future<void> _addSetEndEvent(bool winnerIsUs) async {
@@ -1130,7 +1484,7 @@ class _MatchLivePageState extends State<MatchLivePage>
         })
         .where((doc) {
           // on ne garde que titulaires + libéro
-          return widget.starters.contains(doc.id) || doc.id == widget.liberoId;
+          return activePlayers.contains(doc.id) || doc.id == widget.liberoId;
         })
         .toList();
 
@@ -1159,7 +1513,7 @@ class _MatchLivePageState extends State<MatchLivePage>
           return !liberoForbidden.contains(actionType);
         })
         .where((doc) {
-          return widget.starters.contains(doc.id) || doc.id == widget.liberoId;
+          return activePlayers.contains(doc.id) || doc.id == widget.liberoId;
         })
         .toList();
 
