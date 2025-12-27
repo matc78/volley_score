@@ -27,7 +27,10 @@ class _TeamDetailPageState extends State<TeamDetailPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this)
+      ..addListener(() {
+        setState(() {});
+      });
   }
 
   @override
@@ -110,15 +113,13 @@ class _TeamDetailPageState extends State<TeamDetailPage>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: mikasaBlue,
-        child: const Icon(Icons.add, color: mikasaYellow),
-        onPressed: () {
-          if (_tabController.index == 0) {
-            _showAddPlayerDialog(context, widget.teamId);
-          }
-        },
-      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton(
+              backgroundColor: mikasaBlue,
+              child: const Icon(Icons.add, color: mikasaYellow),
+              onPressed: () => _showAddPlayerDialog(context, widget.teamId),
+            )
+          : null,
     );
   }
 
